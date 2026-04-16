@@ -1,13 +1,9 @@
 # cloud-infrastructure-aws-terraform-k3s
+
 Provisioning a distributed K3s cluster on AWS using Terraform (IaC).
 
-cat > README.md << 'EOF'
-# aws-k3s-cluster-terraform
-
-Provisioning a distributed K3s cluster on AWS using Terraform (Infrastructure as Code).
-
 ## Objective
-This repository is used to define and deploy the infrastructure necessary to deploy a microservice:
+This repository is used to define and implement the infrastructure necessary to deploy a microservice:
 - VPC
 - Subnets across Availability Zones
 - Security Groups
@@ -20,6 +16,5 @@ This repository is used to define and deploy the infrastructure necessary to dep
 - Git
 
 ## Status
-Initial infrastructure repository created. 
-Terraform configuration in progress...
-EOF
+Initial infrastructure repository created. Terraform configuration in progress...
+
