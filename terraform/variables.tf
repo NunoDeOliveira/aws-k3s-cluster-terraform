@@ -58,7 +58,7 @@ variable "key_name" {
 }
 
 # Public IP of the administrator in CIDR notation
-variable "my_ip" {
+variable "local_ip" {
   description = "Public IP authorized for SSH access"
   type        = string
 }

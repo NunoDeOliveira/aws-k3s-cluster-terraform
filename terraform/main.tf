@@ -116,7 +116,7 @@ resource "aws_route_table_association" "public_c" {
 # Work as a firewall for control the traffic of instances
 resource "aws_security_group" "k3s_nodes" {
   name        = "${var.project_name}-nodes-sg"
-  description = "Grupo de seguridad para los nodos del clúster K3s"
+  description = "Security Group for the K3s cluster nodes"
   vpc_id      = aws_vpc.main.id
 
   tags = {
@@ -128,7 +128,7 @@ resource "aws_security_group" "k3s_nodes" {
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
   security_group_id = aws_security_group.k3s_nodes.id
 
-  cidr_ipv4   = var.my_ip
+  cidr_ipv4   = var.local_ip
   from_port   = 22
   to_port     = 22
   ip_protocol = "tcp"
@@ -138,7 +138,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
 resource "aws_vpc_security_group_ingress_rule" "k3s_api" {
   security_group_id = aws_security_group.k3s_nodes.id
 
-  cidr_ipv4   = var.my_ip
+  cidr_ipv4   = var.local_ip
   from_port   = 6443
   to_port     = 6443
   ip_protocol = "tcp"
