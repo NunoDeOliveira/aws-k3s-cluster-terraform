@@ -2,8 +2,6 @@
 
 Provisioning a distributed K3s cluster on AWS using Terraform (IaC).
 
----
-
 ## Objective
 This repository is used to define and implement the infrastructure necessary to deploy a microservice:
 
@@ -12,7 +10,6 @@ This repository is used to define and implement the infrastructure necessary to 
 - Security Groups
 - 3 EC2 instances for a K3s cluster
 
----
 
 ## Tech stack
 
@@ -20,8 +17,6 @@ This repository is used to define and implement the infrastructure necessary to 
 - Terraform (Infrastructure as Code)
 - K3s (Lightweight Kubernetes)
 - Git (Version control)
-
----
 
 ## Infrastructure as Code (IaC)
 
@@ -32,14 +27,11 @@ The infrastructure is defined using Terraform, enabling:
 - Version-controlled infrastructure
 - Consistent deployments across environments
 
----
 ## Deployment
 
 Terraform infrastructure successfully deployed on AWS.
 
 ![Terraform Apply](docs/images/terraform-apply.png)
-
----
 
 ## Status
 Initial deployed on AWS using Terraform it was successfully. 
