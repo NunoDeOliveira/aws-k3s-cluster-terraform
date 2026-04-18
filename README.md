@@ -8,7 +8,7 @@ This repository is used to define and implement the infrastructure necessary to 
 - VPC
 - Subnets across Availability Zones
 - Security Groups
-- EC2 instances for a K3s cluster
+- 3 EC2 instances for a K3s cluster
 
 ## Tech stack
 - AWS
