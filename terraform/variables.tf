@@ -17,9 +17,9 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-# CIDR blocks of the public subnets
+# CIDR blocks of the subnets
 variable "subnet_cidrs" {
-  description = "CIDR blocks of the public subnets"
+  description = "CIDR blocks of subnets"
   type        = list(string)
   default     = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 }
@@ -29,13 +29,6 @@ variable "availability_zones" {
   description = "Availability Zones for subredes"
   type        = list(string)
   default     = ["eu-west-2a", "eu-west-2b", "eu-west-2c"]
-}
-
-# Number of instances in the cluster
-variable "instance_count" {
-  description = "Number of EC2 instances in the cluster"
-  type        = number
-  default     = 3
 }
 
 # Type of EC2 instance. In this case t3.small

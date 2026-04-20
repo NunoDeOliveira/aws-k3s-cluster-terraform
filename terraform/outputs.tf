@@ -18,10 +18,9 @@ output "vpc_cidr" {
 # IDs of public subnets  
 output "subnet_ids" {
   description = "IDs of the public subnets"
-  value = [
-    aws_subnet.public_a.id,
-    aws_subnet.public_b.id,
-    aws_subnet.public_c.id
+  value = [aws_subnet.public_a.id,
+    aws_subnet.private_b.id,
+    aws_subnet.private_c.id
   ]
 }
 
@@ -30,8 +29,8 @@ output "availability_zones" {
   description = "Availability Zones"
   value = [
     aws_subnet.public_a.availability_zone,
-    aws_subnet.public_b.availability_zone,
-    aws_subnet.public_c.availability_zone
+    aws_subnet.private_b.availability_zone,
+    aws_subnet.private_c.availability_zone
   ]
 }
 
@@ -41,17 +40,17 @@ output "k3s_security_group_id" {
   value       = aws_security_group.k3s_nodes.id
 }
 
-# IP public of the control plane node
-output "control_plane_public_ip" {
-  description = "Public IP of the control plane node"
+# IP public of the control plane
+output "control_plane_public_IP" {
+  description = "Public IP of the control plane"
   value       = aws_instance.control_plane.public_ip
 }
 
-# Public IPs of the worker nodes
-output "worker_public_ips" {
-  description = "Public IPs of the worker nodes"
+# Private IPs of the worker nodes
+output "worker_private_IPs" {
+  description = "Private IPs of the worker nodes"
   value = [
-    aws_instance.worker_a.public_ip,
-    aws_instance.worker_c.public_ip
+    aws_instance.worker_b.private_ip,
+    aws_instance.worker_c.private_ip
   ]
 }

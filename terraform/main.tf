@@ -19,8 +19,8 @@ provider "aws" {
   region = var.region
 }
 
-###### VPC configuration #######
-# Define la VPC principal que contendrá toda la infraestructura.
+###### Network configuration #######
+# Define Virtual Private Cloud 
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -32,7 +32,7 @@ resource "aws_vpc" "main" {
 }
 
 
-# Subred pública en la Availability Zone A. Subnet for nodo worker
+# Public subnet in Availability Zone A. Subnet for control plane
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidrs[0]
@@ -44,24 +44,24 @@ resource "aws_subnet" "public_a" {
   }
 }
 
-# Subred pública en la Availability Zone B. Subnet for nodo control plane
-resource "aws_subnet" "public_b" {
+# Private subnet in Availability Zone B. Subnet for nodo
+resource "aws_subnet" "private_b" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidrs[1]
   availability_zone       = var.availability_zones[1]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name = "k3s-subnet-b"
   }
 }
 
-# Subred pública en la Availability Zone C. Subnet for nodo worker
-resource "aws_subnet" "public_c" {
+# Private subnet in Availability Zone C. Subnet for nodo
+resource "aws_subnet" "private_c" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidrs[2]
   availability_zone       = var.availability_zones[2]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name = "k3s-subnet-c"
@@ -83,7 +83,7 @@ resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "k3s-public-rt"
+    Name = "k3s-public-routetable"
   }
 }
 
@@ -101,26 +101,26 @@ resource "aws_route_table_association" "public_a" {
 }
 
 # Asociate subnet B with the public route table
-resource "aws_route_table_association" "public_b" {
-  subnet_id      = aws_subnet.public_b.id
+resource "aws_route_table_association" "private_b" {
+  subnet_id      = aws_subnet.private_b.id
   route_table_id = aws_route_table.public.id
 }
 
 # Acosociate subnet C with the public route table
-resource "aws_route_table_association" "public_c" {
-  subnet_id      = aws_subnet.public_c.id
+resource "aws_route_table_association" "private_c" {
+  subnet_id      = aws_subnet.private_c.id
   route_table_id = aws_route_table.public.id
 }
 
 ###### Security Group ######
 # Work as a firewall for control the traffic of instances
 resource "aws_security_group" "k3s_nodes" {
-  name        = "${var.project_name}-nodes-sg"
+  name        = "${var.project_name}-nodes-secgroup"
   description = "Security Group for the K3s cluster nodes"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name = "${var.project_name}-nodes-sg"
+    Name = "${var.project_name}-nodes-secgroup"
   }
 }
 
@@ -160,8 +160,8 @@ resource "aws_vpc_security_group_egress_rule" "all_outgoing" {
 }
 
 ####### Instancias EC2 ##########
-# Instace of worker node deployed in subnet A
-resource "aws_instance" "worker_a" {
+# Instace of worker control-plane in Availability Zone A
+resource "aws_instance" "control_plane" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public_a.id
@@ -170,34 +170,34 @@ resource "aws_instance" "worker_a" {
   associate_public_ip_address = true
 
   tags = {
-    Name = "${var.project_name}-worker-a"
+    Name = "${var.project_name}-control-plane"
+    Role = "control_plane"
+  }
+}
+
+# Instace of worker node in Availability Zone B.
+resource "aws_instance" "worker_b" {
+  ami                         = var.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.private_b.id
+  vpc_security_group_ids      = [aws_security_group.k3s_nodes.id]
+  key_name                    = var.key_name
+  associate_public_ip_address = false
+
+  tags = {
+    Name = "${var.project_name}-worker-b"
     Role = "worker"
   }
 }
 
-# Instace of control plane deployed in subnet B.
-resource "aws_instance" "control_plane" {
-  ami                         = var.ami_id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public_b.id
-  vpc_security_group_ids      = [aws_security_group.k3s_nodes.id]
-  key_name                    = var.key_name
-  associate_public_ip_address = true
-
-  tags = {
-    Name = "${var.project_name}-control-plane"
-    Role = "control-plane"
-  }
-}
-
-# Instace of worker node deployed in subnet C.
+# Instace of worker node in Availability Zone C.
 resource "aws_instance" "worker_c" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public_c.id
+  subnet_id                   = aws_subnet.private_c.id
   vpc_security_group_ids      = [aws_security_group.k3s_nodes.id]
   key_name                    = var.key_name
-  associate_public_ip_address = true
+  associate_public_ip_address = false
 
   tags = {
     Name = "${var.project_name}-worker-c"
