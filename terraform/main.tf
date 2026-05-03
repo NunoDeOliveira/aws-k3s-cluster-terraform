@@ -1,6 +1,6 @@
 ################################################################
-# Main file of infrastructure.                                
-# Define the resouces of aws requiered to deploy a K3s cluster.
+# Main file of infrastructure.
+# Define the resources of AWS required to deploy a K3s cluster.
 ################################################################
 
 terraform {
@@ -14,23 +14,22 @@ terraform {
   required_version = ">= 1.5.0"
 }
 
-# configuration of provider aws for a specifically region
+# Configuration of AWS provider for a specific region
 provider "aws" {
   region = var.region
 }
 
-###### Network configuration #######
-# Define Virtual Private Cloud 
+####### Network configuration #######
+# Define Virtual Private Cloud
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = "vpc-k3s"
+    Name = "VPC-cluster"
   }
 }
-
 
 # Public subnet in Availability Zone A. Subnet for control plane
 resource "aws_subnet" "public_a" {
@@ -44,7 +43,7 @@ resource "aws_subnet" "public_a" {
   }
 }
 
-# Private subnet in Availability Zone B. Subnet for nodo
+# Private subnet in Availability Zone B. Subnet for worker node
 resource "aws_subnet" "private_b" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidrs[1]
@@ -56,7 +55,7 @@ resource "aws_subnet" "private_b" {
   }
 }
 
-# Private subnet in Availability Zone C. Subnet for nodo
+# Private subnet in Availability Zone C. Subnet for worker node
 resource "aws_subnet" "private_c" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidrs[2]
@@ -68,52 +67,90 @@ resource "aws_subnet" "private_c" {
   }
 }
 
-###### Connectivity ##########
-# Internet Gateway for provide internet access to instances
-resource "aws_internet_gateway" "igw" {
+######### Connectivity ###########
+# Internet Gateway to provide Internet access to the public subnet
+resource "aws_internet_gateway" "internet_gateway" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "infra-igw"
+    Name = "internet-gateway"
   }
 }
 
-# Router table for public subnets, asociated with the Internet Gateway
+# Elastic IP for the NAT Gateway
+resource "aws_eip" "elastic_ip" {
+  domain = "vpc"
+
+  tags = {
+    Name = "elastic-ip"
+  }
+}
+
+# NAT Gateway to provide Internet access to private subnets
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.elastic_ip.id
+  subnet_id     = aws_subnet.public_a.id
+
+  tags = {
+    Name = "nat-gateway"
+  }
+
+  depends_on = [aws_internet_gateway.internet_gateway]
+}
+
+###### Route tables ##########
+# Public route table for the control plane subnet
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "k3s-public-routetable"
+    Name = "public-routetable-control-plane"
   }
 }
 
-# Defaut route for provide outbound internet access 
+# Default route from public subnet to Internet Gateway
 resource "aws_route" "public_internet_access" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.igw.id
+  gateway_id             = aws_internet_gateway.internet_gateway.id
 }
 
-# Asociate subnet A with the public route table
+# Associate public subnet A with the public route table
 resource "aws_route_table_association" "public_a" {
   subnet_id      = aws_subnet.public_a.id
   route_table_id = aws_route_table.public.id
 }
 
-# Asociate subnet B with the public route table
+# Private route table for worker subnets
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "private-routetable-workers"
+  }
+}
+
+# Default route from private subnets to Internet through NAT Gateway
+resource "aws_route" "private_nat_access" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.nat.id
+}
+
+# Associate subnet B with the private route table
 resource "aws_route_table_association" "private_b" {
   subnet_id      = aws_subnet.private_b.id
-  route_table_id = aws_route_table.public.id
+  route_table_id = aws_route_table.private.id
 }
 
-# Acosociate subnet C with the public route table
+# Associate subnet C with the private route table
 resource "aws_route_table_association" "private_c" {
   subnet_id      = aws_subnet.private_c.id
-  route_table_id = aws_route_table.public.id
+  route_table_id = aws_route_table.private.id
 }
 
-###### Security Group ######
-# Work as a firewall for control the traffic of instances
+####### Security Group ########
+# Firewall for controlling traffic to the K3s cluster instances
 resource "aws_security_group" "k3s_nodes" {
   name        = "${var.project_name}-nodes-secgroup"
   description = "Security Group for the K3s cluster nodes"
@@ -124,7 +161,7 @@ resource "aws_security_group" "k3s_nodes" {
   }
 }
 
-# Allows ssh access only from the administrator public IP
+# Allow SSH access only from the administrator public IP
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
   security_group_id = aws_security_group.k3s_nodes.id
 
@@ -134,7 +171,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
   ip_protocol = "tcp"
 }
 
-# Alows access to the Kubernetes API port
+# Allow access to the Kubernetes/K3s API only from the administrator public IP
 resource "aws_vpc_security_group_ingress_rule" "k3s_api" {
   security_group_id = aws_security_group.k3s_nodes.id
 
@@ -144,14 +181,34 @@ resource "aws_vpc_security_group_ingress_rule" "k3s_api" {
   ip_protocol = "tcp"
 }
 
-# Allow communication beteewn nodes of the cluster
+# HTTP access for the API Gateway
+resource "aws_vpc_security_group_ingress_rule" "http" {
+  security_group_id = aws_security_group.k3s_nodes.id
+
+  cidr_ipv4   = "0.0.0.0/0"
+  from_port   = 80
+  to_port     = 80
+  ip_protocol = "tcp"
+}
+
+# NodePort range for exposing K3s services externally
+resource "aws_vpc_security_group_ingress_rule" "nodeport_k3s" {
+  security_group_id = aws_security_group.k3s_nodes.id
+
+  cidr_ipv4   = var.local_ip
+  from_port   = 30000
+  to_port     = 32767
+  ip_protocol = "tcp"
+}
+
+# Allow internal communication between cluster nodes
 resource "aws_vpc_security_group_ingress_rule" "intra_cluster" {
   security_group_id            = aws_security_group.k3s_nodes.id
   referenced_security_group_id = aws_security_group.k3s_nodes.id
   ip_protocol                  = "-1"
 }
 
-# Allows all the traffic from the cluster to internet
+# Allow all outgoing traffic from cluster nodes
 resource "aws_vpc_security_group_egress_rule" "all_outgoing" {
   security_group_id = aws_security_group.k3s_nodes.id
 
@@ -159,8 +216,8 @@ resource "aws_vpc_security_group_egress_rule" "all_outgoing" {
   ip_protocol = "-1"
 }
 
-####### Instancias EC2 ##########
-# Instace of worker control-plane in Availability Zone A
+####### EC2 instances ##########
+# Control plane instance in Availability Zone A
 resource "aws_instance" "control_plane" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
@@ -169,13 +226,19 @@ resource "aws_instance" "control_plane" {
   key_name                    = var.key_name
   associate_public_ip_address = true
 
+  # Install K3s control plane
+  user_data = <<-EOF
+              #!/bin/bash
+              curl -sfL https://get.k3s.io | K3S_TOKEN=${var.k3s_token} sh -
+              EOF
+
   tags = {
     Name = "${var.project_name}-control-plane"
     Role = "control_plane"
   }
 }
 
-# Instace of worker node in Availability Zone B.
+# Worker node instance in Availability Zone B
 resource "aws_instance" "worker_b" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
@@ -184,13 +247,20 @@ resource "aws_instance" "worker_b" {
   key_name                    = var.key_name
   associate_public_ip_address = false
 
+  # Install K3s worker node
+  user_data = <<-EOF
+              #!/bin/bash
+              sleep 90
+              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.control_plane.private_ip}:6443 K3S_TOKEN=${var.k3s_token} sh -s -agent
+              EOF
+
   tags = {
     Name = "${var.project_name}-worker-b"
     Role = "worker"
   }
 }
 
-# Instace of worker node in Availability Zone C.
+# Worker node instance in Availability Zone C
 resource "aws_instance" "worker_c" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
@@ -199,8 +269,17 @@ resource "aws_instance" "worker_c" {
   key_name                    = var.key_name
   associate_public_ip_address = false
 
+  # Install K3s worker node
+  user_data = <<-EOF
+              #!/bin/bash
+              sleep 90
+              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.control_plane.private_ip}:6443 K3S_TOKEN=${var.k3s_token} sh -
+              EOF
+
   tags = {
     Name = "${var.project_name}-worker-c"
     Role = "worker"
   }
 }
+
+

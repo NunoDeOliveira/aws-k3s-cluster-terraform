@@ -62,3 +62,9 @@ variable "project_name" {
   type        = string
   default     = "k3s-cluster"
 }
+
+# Token for nodes of K3s cluster
+variable "k3s_token" {
+  description = "Token for K3s cluster"
+  type        = string
+}

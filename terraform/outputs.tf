@@ -54,3 +54,4 @@ output "worker_private_IPs" {
     aws_instance.worker_c.private_ip
   ]
 }
+
