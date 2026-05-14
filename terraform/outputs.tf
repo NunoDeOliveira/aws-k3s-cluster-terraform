@@ -43,7 +43,7 @@ output "k3s_security_group_id" {
 # IP public of the control plane
 output "control_plane_public_IP" {
   description = "Public IP of the control plane"
-  value       = aws_instance.control_plane.public_ip
+  value       = aws_eip.control_plane_eip.public_ip
 }
 
 # Private IPs of the worker nodes

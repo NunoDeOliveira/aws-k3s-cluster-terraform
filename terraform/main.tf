@@ -36,7 +36,7 @@ resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidrs[0]
   availability_zone       = var.availability_zones[0]
-  map_public_ip_on_launch = true
+  map_public_ip_on_launch = false
 
   tags = {
     Name = "k3s-subnet-a"
@@ -149,6 +149,19 @@ resource "aws_route_table_association" "private_c" {
   route_table_id = aws_route_table.private.id
 }
 
+#### associate static IP to control plane
+resource "aws_eip" "control_plane_eip" {
+  domain = "vpc"
+  tags = {
+    Name = "control-plane-eip"
+  }
+}
+resource "aws_eip_association" "control_plane_eip" {
+  instance_id   = aws_instance.control_plane.id
+  allocation_id = aws_eip.control_plane_eip.id
+}
+
+
 ####### Security Group ########
 # Firewall for controlling traffic to the K3s cluster instances
 resource "aws_security_group" "k3s_nodes" {
@@ -165,7 +178,7 @@ resource "aws_security_group" "k3s_nodes" {
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
   security_group_id = aws_security_group.k3s_nodes.id
 
-  cidr_ipv4   = var.local_ip
+  cidr_ipv4   = "0.0.0.0/0"
   from_port   = 22
   to_port     = 22
   ip_protocol = "tcp"
@@ -175,9 +188,19 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
 resource "aws_vpc_security_group_ingress_rule" "k3s_api" {
   security_group_id = aws_security_group.k3s_nodes.id
 
-  cidr_ipv4   = var.local_ip
+  cidr_ipv4   = "0.0.0.0/0"
   from_port   = 6443
   to_port     = 6443
+  ip_protocol = "tcp"
+}
+
+# Allow access for PostgreSQL 
+resource "aws_vpc_security_group_ingress_rule" "postgres_port" {
+  security_group_id = aws_security_group.k3s_nodes.id
+
+  cidr_ipv4   = var.local_ip
+  from_port   = 5432
+  to_port     = 5432
   ip_protocol = "tcp"
 }
 
@@ -224,7 +247,7 @@ resource "aws_instance" "control_plane" {
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.k3s_nodes.id]
   key_name                    = var.key_name
-  associate_public_ip_address = true
+  associate_public_ip_address = false
 
   # Install K3s control plane
   user_data = <<-EOF
@@ -245,14 +268,15 @@ resource "aws_instance" "worker_b" {
   subnet_id                   = aws_subnet.private_b.id
   vpc_security_group_ids      = [aws_security_group.k3s_nodes.id]
   key_name                    = var.key_name
-  associate_public_ip_address = false
+  associate_public_ip_address = true
 
   # Install K3s worker node
-  user_data = <<-EOF
+    user_data = <<-EOF
               #!/bin/bash
               sleep 90
-              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.control_plane.private_ip}:6443 K3S_TOKEN=${var.k3s_token} sh -s -agent
+              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.control_plane.private_ip}:6443 K3S_TOKEN=${var.k3s_token} sh -s - agent
               EOF
+  
 
   tags = {
     Name = "${var.project_name}-worker-b"
@@ -267,19 +291,19 @@ resource "aws_instance" "worker_c" {
   subnet_id                   = aws_subnet.private_c.id
   vpc_security_group_ids      = [aws_security_group.k3s_nodes.id]
   key_name                    = var.key_name
-  associate_public_ip_address = false
+  associate_public_ip_address = true
 
   # Install K3s worker node
-  user_data = <<-EOF
+    user_data = <<-EOF
               #!/bin/bash
               sleep 90
-              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.control_plane.private_ip}:6443 K3S_TOKEN=${var.k3s_token} sh -
+              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.control_plane.private_ip}:6443 K3S_TOKEN=${var.k3s_token} sh -s - agent
               EOF
+
 
   tags = {
     Name = "${var.project_name}-worker-c"
     Role = "worker"
   }
 }
-
 
